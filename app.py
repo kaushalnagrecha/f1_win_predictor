@@ -55,7 +55,7 @@ if event:
     telemetry = get_fastest_lap_data(year, event)
 
     # Predict the ideal racing line
-    predicted_racing_line = predict_ideal_line(telemetry, weather_data)
+    predicted_racing_line = predict_ideal_line(telemetry)
 
     if predicted_racing_line is not None:
         # Speed Map for Predicted Line
