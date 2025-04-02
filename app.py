@@ -1,108 +1,57 @@
 import fastf1
-import fastf1.plotting
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import dash
-from dash import dcc, html
-from dash.dependencies import Input, Output
+import streamlit as st
 
-# Enable FastF1 Caching for performance
-fastf1.Cache.enable_cache('f1_cache')  
+# Enable FastF1 Cache
+fastf1.Cache.enable_cache('f1_cache')
 
-# Load available events
-def get_available_events(year):
-    schedule = fastf1.get_event_schedule(year)
-    return schedule[['EventName', 'RoundNumber']]
+# Streamlit Page Setup
+st.set_page_config(page_title="F1 Racing Line", layout="wide")
+st.title("🏎️ F1 Ideal Racing Line Dashboard")
 
-# Load session data
+# Sidebar Controls
+year = st.sidebar.selectbox("Select Year", list(range(2018, 2025)), index=5)  # Default 2023
+event_data = fastf1.get_event_schedule(year)[['EventName', 'RoundNumber']]
+event_dict = dict(zip(event_data['EventName'], event_data['RoundNumber']))
+event = st.sidebar.selectbox("Select Event", list(event_dict.keys()))
+
+# Function to Get Data
+@st.cache_data
 def get_fastest_lap_data(year, event):
-    session = fastf1.get_session(year, event, 'R')  # 'R' for Race Session
+    session = fastf1.get_session(year, event_dict[event], 'R')
     session.load()
-    
     fastest_lap = session.laps.pick_fastest()
-    telemetry = fastest_lap.get_telemetry()
-    
-    return telemetry
+    return fastest_lap.get_telemetry()
 
-# Initialize Dash App
-app = dash.Dash(__name__)
-app.title = "F1 Ideal Racing Line Dashboard"
-
-# Layout
-app.layout = html.Div([
-    html.Div([
-        html.H2("F1 Ideal Racing Line"),
-        html.Label("Select Year:"),
-        dcc.Dropdown(
-            id='year-dropdown',
-            options=[{'label': str(y), 'value': y} for y in range(2018, 2025)],
-            value=2023,  # Default Year
-            clearable=False
-        ),
-        html.Label("Select Event:"),
-        dcc.Dropdown(id='event-dropdown', clearable=False),
-    ], style={'width': '20%', 'display': 'inline-block', 'padding': '20px', 'verticalAlign': 'top'}),
-    
-    html.Div([
-        dcc.Graph(id='speed-map'),
-        dcc.Graph(id='gear-map'),
-        dcc.Graph(id='drs-map'),
-    ], style={'width': '75%', 'display': 'inline-block', 'padding': '20px'})
-])
-
-# Callback to update event dropdown based on selected year
-@app.callback(
-    Output('event-dropdown', 'options'),
-    Input('year-dropdown', 'value')
-)
-def update_event_dropdown(year):
-    events = get_available_events(year)
-    return [{'label': name, 'value': round_num} for name, round_num in zip(events['EventName'], events['RoundNumber'])]
-
-# Callback to update the track maps
-@app.callback(
-    [Output('speed-map', 'figure'),
-     Output('gear-map', 'figure'),
-     Output('drs-map', 'figure')],
-    [Input('year-dropdown', 'value'),
-     Input('event-dropdown', 'value')]
-)
-def update_charts(year, event):
-    if not event:
-        return dash.no_update, dash.no_update, dash.no_update
-
+# Load Data
+if event:
     telemetry = get_fastest_lap_data(year, event)
 
     # Speed Map
     speed_fig = px.scatter(
-        telemetry,
-        x='X', y='Y', color='Speed',
-        color_continuous_scale='turbo',
-        title='Ideal Racing Line (Speed-Based)',
+        telemetry, x='X', y='Y', color='Speed',
+        color_continuous_scale='turbo', title='Ideal Racing Line (Speed)',
         labels={'Speed': 'Speed (km/h)'}
     )
-
-    # Gear Map
+    
+    # Gear Shift Map
     gear_fig = px.scatter(
-        telemetry,
-        x='X', y='Y', color='nGear',
-        color_continuous_scale='viridis',
-        title='Ideal Racing Line (Gear Shifts)',
+        telemetry, x='X', y='Y', color='nGear',
+        color_continuous_scale='viridis', title='Ideal Racing Line (Gear Shifts)',
         labels={'nGear': 'Gear'}
     )
 
-    # DRS Activation Map
+    # DRS Map
     telemetry['DRS_Active'] = telemetry['DRS'].apply(lambda x: 'DRS On' if x > 0 else 'DRS Off')
     drs_fig = px.scatter(
-        telemetry,
-        x='X', y='Y', color='DRS_Active',
-        title='DRS Activation Zones',
-        labels={'DRS_Active': 'DRS Status'}
+        telemetry, x='X', y='Y', color='DRS_Active',
+        title='DRS Activation Zones', labels={'DRS_Active': 'DRS Status'}
     )
 
-    return speed_fig, gear_fig, drs_fig
-
-# Run the app
-# if __name__ == '__main__':
-#     app.run_server(debug=True)
+    # Display Graphs
+    col1, col2, col3 = st.columns(3)
+    with col1: st.plotly_chart(speed_fig, use_container_width=True)
+    with col2: st.plotly_chart(gear_fig, use_container_width=True)
+    with col3: st.plotly_chart(drs_fig, use_container_width=True)
