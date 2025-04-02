@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import streamlit as st
+import datetime
+
 
 # Enable FastF1 Cache
 fastf1.Cache.enable_cache('f1_cache')
@@ -12,7 +14,8 @@ st.set_page_config(page_title="F1 Racing Line", layout="wide")
 st.title("🏎️ F1 Ideal Racing Line Dashboard")
 
 # Sidebar Controls
-year = st.sidebar.selectbox("Select Year", list(range(2018, 2025)), index=5)  # Default 2023
+current_year = datetime.datetime.now().year
+year = st.sidebar.selectbox("Select Year", list(range(1950, current_year + 1)), index= -1)  # Default 2023
 event_data = fastf1.get_event_schedule(year)[['EventName', 'RoundNumber']]
 event_dict = dict(zip(event_data['EventName'], event_data['RoundNumber']))
 event = st.sidebar.selectbox("Select Event", list(event_dict.keys()))

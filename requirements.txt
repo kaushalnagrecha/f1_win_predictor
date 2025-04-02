@@ -3,3 +3,4 @@ dash
 plotly
 pandas
 numpy
+datetime
