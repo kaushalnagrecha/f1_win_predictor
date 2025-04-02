@@ -35,6 +35,10 @@ if event:
         color_continuous_scale='turbo', title='Ideal Racing Line (Speed)',
         labels={'Speed': 'Speed (km/h)'}
     )
+    speed_fig.update_layout(
+        xaxis_visible=False,
+        yaxis_visible=False
+    )
     
     # Gear Shift Map
     gear_fig = px.scatter(
@@ -42,12 +46,20 @@ if event:
         color_continuous_scale='viridis', title='Ideal Racing Line (Gear Shifts)',
         labels={'nGear': 'Gear'}
     )
+    gear_fig.update_layout(
+        xaxis_visible=False,
+        yaxis_visible=False
+    )
 
     # DRS Map
     telemetry['DRS_Active'] = telemetry['DRS'].apply(lambda x: 'DRS On' if x > 0 else 'DRS Off')
     drs_fig = px.scatter(
         telemetry, x='X', y='Y', color='DRS_Active',
         title='DRS Activation Zones', labels={'DRS_Active': 'DRS Status'}
+    )
+    drs_fig.update_layout(
+        xaxis_visible=False,
+        yaxis_visible=False
     )
 
     # Display Graphs
