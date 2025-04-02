@@ -15,7 +15,8 @@ st.title("🏎️ F1 Ideal Racing Line Dashboard")
 
 # Sidebar Controls
 current_year = datetime.datetime.now().year
-year = st.sidebar.selectbox("Select Year", list(range(1950, current_year + 1)), index= -1)  # Default 2023
+year_range = list(range(1950, current_year + 1))
+year = st.sidebar.selectbox("Select Year", year_range, index= len(year_range) - 1)  # Default 2023
 event_data = fastf1.get_event_schedule(year)[['EventName', 'RoundNumber']]
 event_dict = dict(zip(event_data['EventName'], event_data['RoundNumber']))
 event = st.sidebar.selectbox("Select Event", list(event_dict.keys()))
