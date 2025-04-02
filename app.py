@@ -14,7 +14,7 @@ st.set_page_config(page_title="F1 Ideal Racing Line", layout="wide")
 st.title("🏎️ F1 Ideal Racing Line Prediction for the Upcoming Season")
 
 # Sidebar Controls
-year = st.sidebar.selectbox("Select Year", list(range(1950, datetime.now().year + 1)), index=5)  # Default 2023
+year = st.sidebar.selectbox("Select Year", list(range(1950, datetime.now().year + 1)), index=5)
 event_data = fastf1.get_event_schedule(year)[['EventName', 'RoundNumber']]
 event_dict = dict(zip(event_data['EventName'], event_data['RoundNumber']))
 event = st.sidebar.selectbox("Select Event", list(event_dict.keys()))
@@ -53,7 +53,6 @@ def predict_ideal_line(telemetry_data, weather_data=None):
 # Load Data
 if event:
     telemetry = get_fastest_lap_data(year, event)
-    weather_data = get_weather_data("Monaco")  # Example: get weather data for Monaco (replace as needed)
 
     # Predict the ideal racing line
     predicted_racing_line = predict_ideal_line(telemetry, weather_data)
