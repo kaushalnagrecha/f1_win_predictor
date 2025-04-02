@@ -14,7 +14,8 @@ st.set_page_config(page_title="F1 Ideal Racing Line", layout="wide")
 st.title("🏎️ F1 Ideal Racing Line Prediction for the Upcoming Season")
 
 # Sidebar Controls
-year = st.sidebar.selectbox("Select Year", list(range(1950, datetime.now().year + 1)), index=5)
+year_range = list(range(1950, datetime.now().year + 1))
+year = st.sidebar.selectbox("Select Year", year_range, index=len(year_range) - 2)
 event_data = fastf1.get_event_schedule(year)[['EventName', 'RoundNumber']]
 event_dict = dict(zip(event_data['EventName'], event_data['RoundNumber']))
 event = st.sidebar.selectbox("Select Event", list(event_dict.keys()))
