@@ -104,5 +104,5 @@ def update_charts(year, event):
     return speed_fig, gear_fig, drs_fig
 
 # Run the app
-if __name__ == '__main__':
-    app.run_server(debug=True)
+# if __name__ == '__main__':
+#     app.run_server(debug=True)
