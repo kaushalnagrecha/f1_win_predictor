@@ -15,8 +15,8 @@ st.set_page_config(page_title="F1 Racing Line Predictor", layout="wide")
 st.title("🏎️ F1 Ideal Racing Line Predictor")
 
 # Sidebar Controls
-current_year = datetime.now().year
-year = st.sidebar.selectbox("Select Year", list(range(1950, current_year + 1)), index=5)
+year_range = list(range(1950, datetime.now().year + 1))
+year = st.sidebar.selectbox("Select Year", year_range, index = len(year_range) - 1)
 event_data = fastf1.get_event_schedule(year)[['EventName', 'RoundNumber']]
 event_dict = dict(zip(event_data['EventName'], event_data['RoundNumber']))
 event = st.sidebar.selectbox("Select Event", list(event_dict.keys()))
