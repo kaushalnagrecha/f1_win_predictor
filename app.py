@@ -17,26 +17,30 @@ def build_dataset(start_year, end_year, round_number):
     """
     Builds a dataset of qualifying and race results from start_year to end_year.
     """
-    # Load Qualifier session data
-    qual_session = fastf1.get_session(end_year, round_number, 'Q')
-    qual_session.load()
-
-    # Get best time using priority: q3 > q2 > q1
-    qual_session.results['best_time'] = qual_session.results[['Q3', 'Q2', 'Q1']].bfill(axis=1).iloc[:, 0]
-
-    # Convert best_time to seconds
-    qual_session.results['best_time_seconds'] = qual_session.results['best_time'].dt.total_seconds()
-    qual_session.results['best_time_seconds'].fillna(qual_session.results['best_time_seconds'].max() + 100, inplace=True)
-
-    # Load Race session data
-    race_session = fastf1.get_session(start_year, round_number, 'R')
-    race_session.load()
-    laps_2024 = race_session.laps[["Driver", "LapTime"]].copy()
-    laps_2024.dropna(subset=["LapTime"], inplace=True)
-    laps_2024["LapTime (s)"] = laps_2024["LapTime"].dt.total_seconds()
-
-    merged_results = laps_2024.merge(qual_session.results, left_on='Driver', right_on='Abbreviation')
-    return merged_results, qual_session.results
+    try:
+        # Load Qualifier session data
+        qual_session = fastf1.get_session(end_year, round_number, 'Q')
+        qual_session.load()
+    
+        # Get best time using priority: q3 > q2 > q1
+        qual_session.results['best_time'] = qual_session.results[['Q3', 'Q2', 'Q1']].bfill(axis=1).iloc[:, 0]
+    
+        # Convert best_time to seconds
+        qual_session.results['best_time_seconds'] = qual_session.results['best_time'].dt.total_seconds()
+        qual_session.results['best_time_seconds'].fillna(qual_session.results['best_time_seconds'].max() + 100, inplace=True)
+    
+        # Load Race session data
+        race_session = fastf1.get_session(start_year, round_number, 'R')
+        race_session.load()
+        laps_2024 = race_session.laps[["Driver", "LapTime"]].copy()
+        laps_2024.dropna(subset=["LapTime"], inplace=True)
+        laps_2024["LapTime (s)"] = laps_2024["LapTime"].dt.total_seconds()
+    
+        merged_results = laps_2024.merge(qual_session.results, left_on='Driver', right_on='Abbreviation')
+        return merged_results, qual_session.results
+    except Exception as e:
+        st.warning(body = 'Something is not right!', icon = '⚠️')
+        return None
 
 def train_models(X_train, y_train):
     """
