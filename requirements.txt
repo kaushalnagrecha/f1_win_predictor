@@ -6,3 +6,4 @@ numpy
 datetime
 joblib
 scikit-learn
+xgboost

@@ -1,130 +1,156 @@
 import fastf1
 import pandas as pd
 import numpy as np
-import plotly.express as px
+from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_absolute_percentage_error
+from xgboost import XGBRegressor
+import matplotlib.pyplot as plt
 import streamlit as st
-import joblib
-from datetime import datetime
-from sklearn.ensemble import RandomForestRegressor
+import plotly.graph_objects as go
+from datetime import datetime, timezone
 
-# Enable FastF1 Cache
-fastf1.Cache.enable_cache('f1_cache')
+# Enable FastF1 cache
+fastf1.Cache.enable_cache('f1_cache')  # You can specify a custom path if desired
 
-# Streamlit Page Setup
-st.set_page_config(page_title="F1 Racing Line Predictor", layout="wide")
-st.title("🏎️ F1 Ideal Racing Line Predictor")
+def build_dataset(start_year, end_year, round_number):
+    """
+    Builds a dataset of qualifying and race results from start_year to end_year.
+    """
+    # Load Qualifier session data
+    qual_session = fastf1.get_session(end_year, round_number, 'Q')
+    qual_session.load()
 
-# Sidebar Controls
-current_year = datetime.now().year
-year_range = list(range(1950, current_year + 1))
-year = st.sidebar.selectbox("Select Year", year_range, index = len(year_range) - 1)
-event_data = fastf1.get_event_schedule(year)[['EventName', 'RoundNumber']]
-event_dict = dict(zip(event_data['EventName'], event_data['RoundNumber']))
-event = st.sidebar.selectbox("Select Event", list(event_dict.keys()))
+    # Get best time using priority: q3 > q2 > q1
+    qual_session.results['best_time'] = qual_session.results[['Q3', 'Q2', 'Q1']].bfill(axis=1).iloc[:, 0]
 
-# Cache fastest lap telemetry
-@st.cache_data
-def get_fastest_lap_data(year, event):
-    try:
-        session = fastf1.get_session(year, event_dict[event], 'R')
-        session.load()
-        fastest_lap = session.laps.pick_fastest()
-        return fastest_lap.get_telemetry()
-    except Exception:
-        return None
+    # Convert best_time to seconds
+    qual_session.results['best_time_seconds'] = qual_session.results['best_time'].dt.total_seconds()
+    qual_session.results['best_time_seconds'].fillna(qual_session.results['best_time_seconds'].max() + 100, inplace=True)
 
-# Cache all historical data for a given track
-@st.cache_data
-def get_historical_data(track_name):
-    all_data = []
-    for hist_year in range(1950, current_year):
-        try:
-            event_data = fastf1.get_event_schedule(hist_year)
-            round_number = event_data[event_data['EventName'] == track_name]['RoundNumber'].values[0]
-            session = fastf1.get_session(hist_year, round_number, 'R')
-            session.load()
-            fastest_lap = session.laps.pick_fastest()
-            telemetry = fastest_lap.get_telemetry()
-            telemetry['Year'] = hist_year
-            all_data.append(telemetry)
-        except:
-            continue
-    return pd.concat(all_data, ignore_index=True) if all_data else None
+    # Load Race session data
+    race_session = fastf1.get_session(start_year, round_number, 'R')
+    race_session.load()
+    laps_2024 = race_session.laps[["Driver", "LapTime"]].copy()
+    laps_2024.dropna(subset=["LapTime"], inplace=True)
+    laps_2024["LapTime (s)"] = laps_2024["LapTime"].dt.total_seconds()
 
-# Predict racing line using a Machine Learning model
-@st.cache_data
-def train_racing_line_model(track_data):
-    if track_data is None or track_data.empty:
-        return None
+    merged_results = laps_2024.merge(qual_session.results, left_on='Driver', right_on='Abbreviation')
+    return merged_results, qual_session.results
 
-    # Features and Target Variables
-    features = track_data[['X', 'Y', 'nGear']]
-    targets = track_data[['Speed']]
+def train_models(X_train, y_train):
+    """
+    Trains 3 models - GradientBoostingRegressor, RandomForestRegressor, XGBoostRegressor
+    """
+    gb_model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, random_state=35)
+    gb_model.fit(X_train, y_train)
 
-    # Train Random Forest Model
-    model = RandomForestRegressor(n_estimators=100, random_state=42)
-    model.fit(features, targets.values.ravel())
+    rf_model = RandomForestRegressor(n_estimators=100, random_state=35)
+    rf_model.fit(X_train, y_train)
 
-    return model
+    xgboost_model = XGBRegressor(n_estimators=100, learning_rate=0.1, random_state=35)
+    xgboost_model.fit(X_train, y_train)
+    return gb_model, rf_model, xgboost_model
 
-# Predict ideal racing line based on historical data
-@st.cache_data
-def predict_ideal_racing_line(model, track_data):
-    if model is None or track_data is None or track_data.empty:
-        return None
+def predict(gb_model, rf_model, xgboost_model, qualifying_results):
+    gb_y_pred = gb_model.predict(qualifying_results[['best_time_seconds']])
+    rf_y_pred = rf_model.predict(qualifying_results[['best_time_seconds']])
+    xgb_y_pred = xgboost_model.predict(qualifying_results[['best_time_seconds']])
+    final_df = pd.DataFrame({
+        'Driver': qualifying_results['FullName'],
+        'Abbreviation': qualifying_results['Abbreviation'],
+        'Qualifying Time (s)': qualifying_results['best_time_seconds'],
+        'Gradient Boosting Predictioned Time (s)': gb_y_pred,
+        'Random Forest Predictioned Time (s)': rf_y_pred,
+        'XGBoost Predictioned Time (s)': xgb_y_pred
+        })
+    return final_df
+
+def evaluate_models(gb_model, rf_model, xgboost_model, X_test, y_test):
+    gb_y_pred = gb_model.predict(X_test)
+    rf_y_pred = rf_model.predict(X_test)
+    xgb_y_pred = xgboost_model.predict(X_test)
+    evaluation_df = pd.DataFrame({
+        'Model': ['Gradient Boosting', 'Random Forest', 'XGBoost'],
+        'MAPE': [mean_absolute_percentage_error(y_test, gb_y_pred) * 100, mean_absolute_percentage_error(y_test, rf_y_pred) * 100, mean_absolute_percentage_error(y_test, xgb_y_pred) * 100]
+        })
+    return evaluation_df
+
+def create_gauge(title, value):
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=value,
+        title={'text': title},
+        gauge={
+            'axis': {'range': [0, 5]},  # Adjust based on your expected MAPE range
+            'bar': {'color': "red"},
+            'steps': [
+                {'range': [0, 10], 'color': 'green'},
+                {'range': [10, 15], 'color': 'yellow'},
+                {'range': [15, 25], 'color': 'red'}
+            ],
+            'threshold': {
+                'line': {'color': "black", 'width': 4},
+                'thickness': 0.75,
+                'value': value
+            }
+        }
+    ))
+    fig.update_layout(margin=dict(t=40, b=0, l=0, r=0))
+    return fig
+
+def plot(final_df, evaluation_df):
+    col1, col2, col3 = st.columns(3)
+    # Render each gauge in its own column
+    with col1:
+        st.plotly_chart(create_gauge("Gradient Boosting", evaluation_df['Gradient Boosting']), use_container_width=True)
+
+    with col2:
+        st.plotly_chart(create_gauge("Random Forest", evaluation_df['Random Forest']), use_container_width=True)
+
+    with col3:
+        st.plotly_chart(create_gauge("XGBoost", evaluation_df['XGBoost']), use_container_width=True)
+    # Render Predicted DataFrame
+    st.dataframe(final_df, height=300)
+
+def main():
+
+    st.title("🏎️ F1 Race Prediction App")
+
+    st.sidebar.header("Race Settings")
+    year = st.sidebar.number_input("Year", max_value=datetime.now().year, value=datetime.now().year)
+    events = fastf1.get_event_schedule(year)
+    events = events[events['EventName'] != 'Pre-Season Testing'][['RoundNumber', 'EventDate']]
+    # Filter for completed qualifying sessions
+    now = datetime.now(timezone.utc)
+    # Convert 'Session4DateUtc' column to timezone-aware datetime objects
+    events['Session4DateUtc'] = pd.to_datetime(events['Session4DateUtc'], utc=True) 
+    completed_qualis = events[events['Session4DateUtc'] < now & events['EventName'] != 'Pre-Season Testing']
+
+    # Extract event names
+    qualifying_done_events = completed_qualis['EventName'].tolist()
+    qualifying_done_events
+    round_number = st.sidebar.selectbox("Select Race", options=qualifying_done_events, value = qualifying_done_events[-1])
+
+    # Build dataset from 2019 to 2024
+    data, qualifying_results = build_dataset(year - 1, year, round_number)
     
-    predicted_data = track_data.copy()
-    predicted_data['PredictedSpeed'] = model.predict(track_data[['X', 'Y', 'nGear']])
-    return predicted_data
+    if data.empty:
+        print("No data available.")
+        return
+    
+    X_train, X_test, y_train, y_test = train_test_split(data)
+    # Train models
+    gb_model, rf_model, xgboost_model = train_models(X_train, y_train)
 
-# Load Data
-if event:
-    telemetry = get_fastest_lap_data(year, event)
-    is_past_race = year < current_year
+    # Predict
+    final_df = predict(gb_model, rf_model, xgboost_model, qualifying_results)
+    
+    # Evaluate models
+    evaluation_df = evaluate_models(gb_model, rf_model, xgboost_model, X_test, y_test)
+    
+    # Plot correlation (using data from 2018 onwards)
+    plot(final_df, evaluation_df)
 
-    if is_past_race and telemetry is not None:
-        # Display actual fastest lap and predicted ideal lap
-        historical_data = get_historical_data(event)
-        ml_model = train_racing_line_model(historical_data)
-        predicted_racing_line = predict_ideal_racing_line(ml_model, historical_data)
-
-        if predicted_racing_line is not None:
-            # Speed Map for Actual Fastest Lap
-            actual_speed_fig = px.scatter(
-                telemetry, x='X', y='Y', color='Speed',
-                color_continuous_scale='turbo', title='Actual Fastest Lap (Speed)',
-                labels={'Speed': 'Speed (km/h)'}
-            )
-            actual_speed_fig.update_layout(xaxis_visible=False, yaxis_visible=False)
-
-            # Speed Map for Predicted Ideal Line
-            predicted_speed_fig = px.scatter(
-                predicted_racing_line, x='X', y='Y', color='PredictedSpeed',
-                color_continuous_scale='turbo', title='Predicted Ideal Racing Line (Speed)',
-                labels={'PredictedSpeed': 'Speed (km/h)'}
-            )
-            predicted_speed_fig.update_layout(xaxis_visible=False, yaxis_visible=False)
-
-            # Display Graphs
-            col1, col2 = st.columns(2)
-            with col1: st.plotly_chart(actual_speed_fig, use_container_width=True)
-            with col2: st.plotly_chart(predicted_speed_fig, use_container_width=True)
-        else:
-            st.warning("Not enough historical data available for prediction.")
-
-    elif not is_past_race:
-        # Predict only ideal racing line for future races
-        historical_data = get_historical_data(event)
-        ml_model = train_racing_line_model(historical_data)
-        predicted_racing_line = predict_ideal_racing_line(ml_model, historical_data)
-
-        if predicted_racing_line is not None:
-            predicted_speed_fig = px.scatter(
-                predicted_racing_line, x='X', y='Y', color='PredictedSpeed',
-                color_continuous_scale='turbo', title='Predicted Ideal Racing Line (Speed)',
-                labels={'PredictedSpeed': 'Speed (km/h)'}
-            )
-            predicted_speed_fig.update_layout(xaxis_visible=False, yaxis_visible=False)
-            st.plotly_chart(predicted_speed_fig, use_container_width=True)
-        else:
-            st.warning("Not enough historical data available for prediction.")
+if __name__ == "__main__":
+    main()
