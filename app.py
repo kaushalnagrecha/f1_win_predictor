@@ -62,11 +62,10 @@ def predict(gb_model, rf_model, xgboost_model, qualifying_results):
     xgb_y_pred = xgboost_model.predict(qualifying_results[['best_time_seconds']])
     final_df = pd.DataFrame({
         'Driver': qualifying_results['FullName'],
-        'Abbreviation': qualifying_results['Abbreviation'],
         'Qualifying Time (s)': qualifying_results['best_time_seconds'],
-        'Gradient Boosting Predictioned Time (s)': gb_y_pred,
-        'Random Forest Predictioned Time (s)': rf_y_pred,
-        'XGBoost Predictioned Time (s)': xgb_y_pred
+        'GB Time (s)': gb_y_pred,
+        'RF Time (s)': rf_y_pred,
+        'XGB Time (s)': xgb_y_pred
         })
     return final_df
 
@@ -74,19 +73,21 @@ def evaluate_models(gb_model, rf_model, xgboost_model, X_test, y_test):
     gb_y_pred = gb_model.predict(X_test)
     rf_y_pred = rf_model.predict(X_test)
     xgb_y_pred = xgboost_model.predict(X_test)
-    evaluation_df = pd.DataFrame({
-        'Model': ['Gradient Boosting', 'Random Forest', 'XGBoost'],
-        'MAPE': [mean_absolute_percentage_error(y_test, gb_y_pred) * 100, mean_absolute_percentage_error(y_test, rf_y_pred) * 100, mean_absolute_percentage_error(y_test, xgb_y_pred) * 100]
-        })
-    return evaluation_df
+    evaluation_dict = {
+        'Gradient Boosting': mean_absolute_percentage_error(y_test, gb_y_pred) * 100,
+        'Random Forest': mean_absolute_percentage_error(y_test, rf_y_pred) * 100, 
+        'XGBoost': mean_absolute_percentage_error(y_test, xgb_y_pred) * 100
+        }
+    return evaluation_dict
 
 def create_gauge(title, value):
+    upper_limit = int(value + 2)
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=value,
         title={'text': title},
         gauge={
-            'axis': {'range': [0, 5]},  # Adjust based on your expected MAPE range
+            'axis': {'range': [0, upper_limit]},
             'bar': {'color': "red"},
             'steps': [
                 {'range': [0, 10], 'color': 'green'},
@@ -100,10 +101,11 @@ def create_gauge(title, value):
             }
         }
     ))
-    fig.update_layout(margin=dict(t=40, b=0, l=0, r=0))
+    fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=250)
     return fig
 
 def plot(final_df, evaluation_df):
+    st.subheader('‼️ Mean Absolute Percentage Error ‼️')
     col1, col2, col3 = st.columns(3)
     # Render each gauge in its own column
     with col1:
@@ -114,6 +116,8 @@ def plot(final_df, evaluation_df):
 
     with col3:
         st.plotly_chart(create_gauge("XGBoost", evaluation_df['XGBoost']), use_container_width=True)
+    
+    st.subheader('🔮 Race Predictions')
     # Render Predicted DataFrame
     st.dataframe(final_df, height=300)
 
@@ -122,7 +126,7 @@ def main():
     st.title("🏎️ F1 Race Prediction App")
 
     st.sidebar.header("Race Settings")
-    year = st.sidebar.number_input("Year", max_value=datetime.now().year, value=datetime.now().year)
+    year = st.sidebar.number_input("Year", disabled=True, value=datetime.now().year)
     events = fastf1.get_event_schedule(year)
     events = events[events['EventName'] != 'Pre-Season Testing']
     # Filter for completed qualifying sessions
@@ -133,8 +137,7 @@ def main():
 
     # Extract event names
     qualifying_done_events = completed_qualis['EventName'].tolist()
-    qualifying_done_events
-    round_number = st.sidebar.selectbox("Select Race", options=qualifying_done_events, index = len(qualifying_done_events) - 1)
+    round_number = st.sidebar.selectbox("Select Race", options=qualifying_done_events, index = 0)
 
     # Build dataset from 2019 to 2024
     data, qualifying_results = build_dataset(year - 1, year, round_number)
@@ -143,7 +146,9 @@ def main():
         print("No data available.")
         return
     
-    X_train, X_test, y_train, y_test = train_test_split(data)
+    X = data[['best_time_seconds']]
+    y = data['LapTime (s)']
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=35)
     # Train models
     gb_model, rf_model, xgboost_model = train_models(X_train, y_train)
 
