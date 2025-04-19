@@ -1,0 +1,9 @@
+fastf1
+dash
+plotly
+pandas
+numpy
+datetime
+joblib
+scikit-learn
+xgboost
