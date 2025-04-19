@@ -23,7 +23,7 @@ This application predicts **Formula 1 race performance** using actual qualifying
 
 > “How can qualifying performance help predict race pace?”
 
-This app investigates that relationship by analyzing data across multiple seasons (since 2018), learning from it, and then applying the insights to **real-time qualifying data** to predict fastest lap performance for a new race.
+This app investigates that relationship by analyzing data from previous season, learning from it, and then applying the insights to **real-time qualifying data** to predict fastest lap performance for a new race.
 
 ---
 
@@ -46,14 +46,6 @@ Three gauge charts showing model performance side by side:
 - Random Forest
 - XGBoost
 
-### 🔮 Race Prediction Table
-
-| Driver           | Qualifying Time (s) | GB Time (s) | RF Time (s) | XGB Time (s) |
-|------------------|---------------------|-------------|-------------|--------------|
-| Max Verstappen   | 92.845              | 97.32       | 97.20       | 97.28        |
-| Lewis Hamilton   | 93.130              | 97.56       | 97.39       | 97.45        |
-| Charles Leclerc  | 93.210              | 97.61       | 97.42       | 97.50        |
-
 ---
 
 ### 📦 Tech Stack
@@ -62,7 +54,7 @@ Three gauge charts showing model performance side by side:
 - 🧪 **scikit-learn**, **XGBoost** – machine learning models
 - 📊 **Plotly**, **Streamlit** – interactive dashboards and visualizations
 - 🧹 **pandas**, **numpy** – data manipulation
-- 🧠 **MAPE** – model evaluation metric
+- 🧪 **MAPE** – model evaluation metric
 
 ---
 
@@ -82,7 +74,7 @@ streamlit run app.py
 
 ---
 
-### 🧠 Behind the Scenes
+### 🌤️ Behind the Scenes
 
 - Uses `Q3 > Q2 > Q1` priority logic to determine each driver's best qualifying time  
 - Filters for **completed qualifying sessions** only using `Session4DateUtc` from the event schedule  
@@ -111,14 +103,16 @@ streamlit run app.py
 
 ---
 
-### 👋 About Me
+### 💼 Why This Project Matters
 
-This project was built as part of a **Data Science internship application**, designed to showcase:
+This project was built and designed to showcase:
 
 - ML proficiency  
 - Real-world data wrangling  
 - API consumption  
 - Real-time dashboard creation
+
+---
 
 If you'd like to collaborate, extend the project, or just talk F1 + data science — let’s connect!
 
