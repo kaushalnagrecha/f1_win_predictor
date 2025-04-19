@@ -40,7 +40,7 @@ def build_dataset(start_year, end_year, round_number):
         return merged_results, qual_session.results
     except Exception as e:
         st.warning(body = 'Something is not right!', icon = '⚠️')
-        return None
+        return pd.DataFrame()
 
 def train_models(X_train, y_train):
     """
