@@ -120,12 +120,12 @@ def main():
     st.sidebar.header("Race Settings")
     year = st.sidebar.number_input("Year", max_value=datetime.now().year, value=datetime.now().year)
     events = fastf1.get_event_schedule(year)
-    events = events[events['EventName'] != 'Pre-Season Testing'][['RoundNumber', 'EventDate']]
+    events = events[events['EventName'] != 'Pre-Season Testing']
     # Filter for completed qualifying sessions
     now = datetime.now(timezone.utc)
     # Convert 'Session4DateUtc' column to timezone-aware datetime objects
     events['Session4DateUtc'] = pd.to_datetime(events['Session4DateUtc'], utc=True) 
-    completed_qualis = events[events['Session4DateUtc'] < now & events['EventName'] != 'Pre-Season Testing']
+    completed_qualis = events[events['Session4DateUtc'] < now]
 
     # Extract event names
     qualifying_done_events = completed_qualis['EventName'].tolist()
