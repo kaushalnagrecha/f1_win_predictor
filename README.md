@@ -1,4 +1,4 @@
-# 🏁 F1 Race Prediction App — Real-Time Machine Learning on Formula 1 Data
+## 🏁 F1 Race Prediction App — Real-Time Machine Learning on Formula 1 Data
 
 Welcome to a project that merges **machine learning**, **sports analytics**, and **real-time data engineering** into a sleek and interactive dashboard.
 
@@ -8,7 +8,7 @@ This application predicts **Formula 1 race performance** using actual qualifying
 
 ---
 
-## 🚀 Live Features
+### 🚀 Live Features
 
 ✅ Predicts race **fastest lap times** for each driver based on qualifying  
 ✅ Trains **Gradient Boosting**, **Random Forest**, and **XGBoost** regressors  
@@ -19,7 +19,7 @@ This application predicts **Formula 1 race performance** using actual qualifying
 
 ---
 
-## 🎯 Use Case
+### 🎯 Use Case
 
 > “How can qualifying performance help predict race pace?”
 
@@ -27,7 +27,7 @@ This app investigates that relationship by analyzing data across multiple season
 
 ---
 
-## 🧠 Prediction Logic
+### 🧠 Prediction Logic
 
 1. 🔄 Pull **race data from previous year**, and **qualifying data from current year**
 2. 📊 Extract best qualifying time per driver (Q3 > Q2 > Q1)
@@ -56,7 +56,7 @@ Three gauge charts showing model performance side by side:
 
 ---
 
-## 📦 Tech Stack
+### 📦 Tech Stack
 
 - 📡 **FastF1 API** – official F1 timing data
 - 🧪 **scikit-learn**, **XGBoost** – machine learning models
@@ -66,15 +66,15 @@ Three gauge charts showing model performance side by side:
 
 ---
 
-## 🛠️ Getting Started
+### 🛠️ Getting Started
 
-### ✅ Prerequisites
+#### ✅ Prerequisites
 
 ```bash
 pip install fastf1 streamlit pandas numpy scikit-learn xgboost plotly
 ```
 
-### ▶️ Run the App
+#### ▶️ Run the App
 
 ```bash
 streamlit run app.py
@@ -82,7 +82,7 @@ streamlit run app.py
 
 ---
 
-## 🧠 Behind the Scenes
+### 🧠 Behind the Scenes
 
 - Uses `Q3 > Q2 > Q1` priority logic to determine each driver's best qualifying time  
 - Filters for **completed qualifying sessions** only using `Session4DateUtc` from the event schedule  
@@ -92,7 +92,7 @@ streamlit run app.py
 
 ---
 
-## 🎯 Future Improvements
+### 🎯 Future Improvements
 
 - Include predicted race finishing positions  
 - Extend prediction logic using car/team telemetry  
@@ -101,7 +101,7 @@ streamlit run app.py
 
 ---
 
-## 📂 Project Structure
+### 📂 Project Structure
 
 ```
 ├── app.py               # Streamlit app with full pipeline
@@ -111,7 +111,7 @@ streamlit run app.py
 
 ---
 
-## 👋 About Me
+### 👋 About Me
 
 This project was built as part of a **Data Science internship application**, designed to showcase:
 
