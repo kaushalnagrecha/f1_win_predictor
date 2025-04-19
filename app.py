@@ -130,7 +130,7 @@ def main():
     # Extract event names
     qualifying_done_events = completed_qualis['EventName'].tolist()
     qualifying_done_events
-    round_number = st.sidebar.selectbox("Select Race", options=qualifying_done_events, value = qualifying_done_events[-1])
+    round_number = st.sidebar.selectbox("Select Race", options=qualifying_done_events, index = len(qualifying_done_events) - 1)
 
     # Build dataset from 2019 to 2024
     data, qualifying_results = build_dataset(year - 1, year, round_number)
