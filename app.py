@@ -5,43 +5,60 @@ from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_percentage_error
 from xgboost import XGBRegressor
-import matplotlib.pyplot as plt
 import streamlit as st
 import plotly.graph_objects as go
 from datetime import datetime, timezone
 
-# Enable FastF1 cache
-fastf1.Cache.enable_cache('f1_cache')  # You can specify a custom path if desired
+# Suppress the messy FastF1 diagnostic logs in the terminal
+fastf1.set_log_level('ERROR')
 
-def build_dataset(start_year, end_year, round_number):
+# Enable FastF1 cache
+fastf1.Cache.enable_cache('f1_cache') 
+
+def build_dataset(current_year, event_name):
     """
-    Builds a dataset of qualifying and race results from start_year to end_year.
+    Finds the most recent past occurrence of the event for training data,
+    and gets the current year's qualifying results for prediction.
     """
     try:
-        # 1. Load PAST Qualifying data (for training)
-        qual_session_past = fastf1.get_session(start_year, round_number, 'Q')
+        # 1. Search backwards to find the last time this specific event was held
+        start_year = None
+        for y in range(current_year - 1, 2017, -1): # Search back to 2018
+            schedule = fastf1.get_event_schedule(y)
+            if event_name in schedule['EventName'].values:
+                # Found the most recent past occurrence
+                start_year = y
+                break
+                
+        if start_year is None:
+            st.warning(f"Could not find any past data for '{event_name}' since 2018 to train the model.")
+            return pd.DataFrame(), pd.DataFrame(), None
+
+        # 2. Load PAST Qualifying data (for training)
+        qual_session_past = fastf1.get_session(start_year, event_name, 'Q')
         qual_session_past.load()
     
         # Get best time using priority: q3 > q2 > q1
         qual_session_past.results['best_time'] = qual_session_past.results[['Q3', 'Q2', 'Q1']].bfill(axis=1).iloc[:, 0]
         qual_session_past.results['best_time_seconds'] = qual_session_past.results['best_time'].dt.total_seconds()
         
-        # Fix the SettingWithCopyWarning / FutureWarning
+        # Fill missing with max time + 100s
         max_time_past = qual_session_past.results['best_time_seconds'].max() + 100
         qual_session_past.results['best_time_seconds'] = qual_session_past.results['best_time_seconds'].fillna(max_time_past)
     
-        # 2. Load PAST Race session data (for training target variable)
-        race_session_past = fastf1.get_session(start_year, round_number, 'R')
+        # 3. Load PAST Race session data (for training target variable)
+        race_session_past = fastf1.get_session(start_year, event_name, 'R')
         race_session_past.load()
         laps_past = race_session_past.laps[["Driver", "LapTime"]].copy()
         laps_past.dropna(subset=["LapTime"], inplace=True)
         laps_past["LapTime (s)"] = laps_past["LapTime"].dt.total_seconds()
     
-        # 3. Merge PAST Quali and PAST Race to create the training set
+        # 4. Merge PAST Quali and PAST Race to create the training set
+        # Using 3-letter Abbreviation to perfectly match drivers, entirely ignoring car numbers
         merged_results = laps_past.merge(qual_session_past.results, left_on='Driver', right_on='Abbreviation')
         
-        # 4. Load CURRENT Qualifying data (for predictions)
-        qual_session_current = fastf1.get_session(end_year, round_number, 'Q')
+        # 5. Load CURRENT Qualifying data (for predictions)
+        qual_session_current = fastf1.get_session(current_year, event_name, 'Q')
         qual_session_current.load()
         
         qual_session_current.results['best_time'] = qual_session_current.results[['Q3', 'Q2', 'Q1']].bfill(axis=1).iloc[:, 0]
@@ -49,18 +66,15 @@ def build_dataset(start_year, end_year, round_number):
         max_time_curr = qual_session_current.results['best_time_seconds'].max() + 100
         qual_session_current.results['best_time_seconds'] = qual_session_current.results['best_time_seconds'].fillna(max_time_curr)
 
-        return merged_results, qual_session_current.results
+        return merged_results, qual_session_current.results, start_year
         
     except Exception as e:
         # Display the actual underlying FastF1 error to the user
         st.warning(body=f'Failed to load FastF1 data: {e}', icon='⚠️')
-        # Return two empty dataframes to prevent the "unpack" ValueError
-        return pd.DataFrame(), pd.DataFrame()
+        # Return empty dataframes to prevent unpacking ValueError
+        return pd.DataFrame(), pd.DataFrame(), None
 
 def train_models(X_train, y_train):
-    """
-    Trains 3 models - GradientBoostingRegressor, RandomForestRegressor, XGBoostRegressor
-    """
     gb_model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, random_state=35)
     gb_model.fit(X_train, y_train)
 
@@ -149,7 +163,6 @@ def main():
     
     # Filter for completed qualifying sessions
     now = datetime.now(timezone.utc)
-    # Convert 'Session4DateUtc' column to timezone-aware datetime objects
     events['Session4DateUtc'] = pd.to_datetime(events['Session4DateUtc'], utc=True) 
     completed_qualis = events[events['Session4DateUtc'] < now]
 
@@ -159,14 +172,16 @@ def main():
         st.warning("No completed qualifying sessions found yet.")
         return
         
-    round_number = st.sidebar.selectbox("Select Race", options=qualifying_done_events, index=0)
+    event_name = st.sidebar.selectbox("Select Race", options=qualifying_done_events, index=0)
 
-    # Build dataset from 2019 to 2024
-    data, qualifying_results = build_dataset(year - 1, year, round_number)
+    # Build dataset (dynamically searches for past year)
+    data, qualifying_results, training_year = build_dataset(year, event_name)
     
     if data.empty or qualifying_results.empty:
         st.error("Data is currently unavailable for this session. It's possible FastF1 hasn't published the race telemetry yet.")
         return
+        
+    st.sidebar.success(f"Model trained on data from the {training_year} {event_name}.")
     
     X = data[['best_time_seconds']]
     y = data['LapTime (s)']
@@ -181,7 +196,7 @@ def main():
     # Evaluate models
     evaluation_df = evaluate_models(gb_model, rf_model, xgboost_model, X_test, y_test)
     
-    # Plot correlation (using data from 2018 onwards)
+    # Plot correlation
     plot(final_df, evaluation_df)
 
 if __name__ == "__main__":
