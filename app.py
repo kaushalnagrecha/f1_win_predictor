@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 from datetime import datetime, timezone
 
 # Suppress the messy FastF1 diagnostic logs in the terminal
-fastf1.set_log_level('ERROR')
+# fastf1.set_log_level('ERROR')
 
 # Enable FastF1 cache
 fastf1.Cache.enable_cache('f1_cache') 
