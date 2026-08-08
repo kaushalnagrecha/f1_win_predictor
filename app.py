@@ -18,29 +18,44 @@ def build_dataset(start_year, end_year, round_number):
     Builds a dataset of qualifying and race results from start_year to end_year.
     """
     try:
-        # Load Qualifier session data
-        qual_session = fastf1.get_session(end_year, round_number, 'Q')
-        qual_session.load()
+        # 1. Load PAST Qualifying data (for training)
+        qual_session_past = fastf1.get_session(start_year, round_number, 'Q')
+        qual_session_past.load()
     
         # Get best time using priority: q3 > q2 > q1
-        qual_session.results['best_time'] = qual_session.results[['Q3', 'Q2', 'Q1']].bfill(axis=1).iloc[:, 0]
+        qual_session_past.results['best_time'] = qual_session_past.results[['Q3', 'Q2', 'Q1']].bfill(axis=1).iloc[:, 0]
+        qual_session_past.results['best_time_seconds'] = qual_session_past.results['best_time'].dt.total_seconds()
+        
+        # Fix the SettingWithCopyWarning / FutureWarning
+        max_time_past = qual_session_past.results['best_time_seconds'].max() + 100
+        qual_session_past.results['best_time_seconds'] = qual_session_past.results['best_time_seconds'].fillna(max_time_past)
     
-        # Convert best_time to seconds
-        qual_session.results['best_time_seconds'] = qual_session.results['best_time'].dt.total_seconds()
-        qual_session.results['best_time_seconds'].fillna(qual_session.results['best_time_seconds'].max() + 100, inplace=True)
+        # 2. Load PAST Race session data (for training target variable)
+        race_session_past = fastf1.get_session(start_year, round_number, 'R')
+        race_session_past.load()
+        laps_past = race_session_past.laps[["Driver", "LapTime"]].copy()
+        laps_past.dropna(subset=["LapTime"], inplace=True)
+        laps_past["LapTime (s)"] = laps_past["LapTime"].dt.total_seconds()
     
-        # Load Race session data
-        race_session = fastf1.get_session(start_year, round_number, 'R')
-        race_session.load()
-        laps_2024 = race_session.laps[["Driver", "LapTime"]].copy()
-        laps_2024.dropna(subset=["LapTime"], inplace=True)
-        laps_2024["LapTime (s)"] = laps_2024["LapTime"].dt.total_seconds()
-    
-        merged_results = laps_2024.merge(qual_session.results, left_on='Driver', right_on='Abbreviation')
-        return merged_results, qual_session.results
+        # 3. Merge PAST Quali and PAST Race to create the training set
+        merged_results = laps_past.merge(qual_session_past.results, left_on='Driver', right_on='Abbreviation')
+        
+        # 4. Load CURRENT Qualifying data (for predictions)
+        qual_session_current = fastf1.get_session(end_year, round_number, 'Q')
+        qual_session_current.load()
+        
+        qual_session_current.results['best_time'] = qual_session_current.results[['Q3', 'Q2', 'Q1']].bfill(axis=1).iloc[:, 0]
+        qual_session_current.results['best_time_seconds'] = qual_session_current.results['best_time'].dt.total_seconds()
+        max_time_curr = qual_session_current.results['best_time_seconds'].max() + 100
+        qual_session_current.results['best_time_seconds'] = qual_session_current.results['best_time_seconds'].fillna(max_time_curr)
+
+        return merged_results, qual_session_current.results
+        
     except Exception as e:
-        st.warning(body = 'Something is not right!', icon = '⚠️')
-        return pd.DataFrame()
+        # Display the actual underlying FastF1 error to the user
+        st.warning(body=f'Failed to load FastF1 data: {e}', icon='⚠️')
+        # Return two empty dataframes to prevent the "unpack" ValueError
+        return pd.DataFrame(), pd.DataFrame()
 
 def train_models(X_train, y_train):
     """
@@ -128,7 +143,10 @@ def main():
     st.sidebar.header("Race Settings")
     year = st.sidebar.number_input("Year", disabled=True, value=datetime.now().year)
     events = fastf1.get_event_schedule(year)
-    events = events[events['EventName'] != 'Pre-Season Testing']
+    
+    # Use .copy() here to avoid the Pandas chained assignment warning later
+    events = events[events['EventName'] != 'Pre-Season Testing'].copy()
+    
     # Filter for completed qualifying sessions
     now = datetime.now(timezone.utc)
     # Convert 'Session4DateUtc' column to timezone-aware datetime objects
@@ -137,18 +155,23 @@ def main():
 
     # Extract event names
     qualifying_done_events = completed_qualis['EventName'].tolist()
-    round_number = st.sidebar.selectbox("Select Race", options=qualifying_done_events, index = 0)
+    if not qualifying_done_events:
+        st.warning("No completed qualifying sessions found yet.")
+        return
+        
+    round_number = st.sidebar.selectbox("Select Race", options=qualifying_done_events, index=0)
 
     # Build dataset from 2019 to 2024
     data, qualifying_results = build_dataset(year - 1, year, round_number)
     
-    if data.empty:
-        print("No data available.")
+    if data.empty or qualifying_results.empty:
+        st.error("Data is currently unavailable for this session. It's possible FastF1 hasn't published the race telemetry yet.")
         return
     
     X = data[['best_time_seconds']]
     y = data['LapTime (s)']
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=35)
+    
     # Train models
     gb_model, rf_model, xgboost_model = train_models(X_train, y_train)
 
